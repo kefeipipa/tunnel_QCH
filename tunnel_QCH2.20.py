@@ -205,7 +205,7 @@ class cs_mac(object):
         self.reservation = 1
         self.peer_addr = "\0\0\0\0\0\0"
         self.data_channel = -1
-        self.time_slot = 0.03
+        self.time_slot = 0.05
 
 
 	self.mycon = threading.Condition()
@@ -240,6 +240,7 @@ class cs_mac(object):
         self.fg.rxpath.u.set_center_freq(channel)
 
     def usual_channel_jump(self):
+	self.jumplast_time = time.time()
         while 1:
 	    last_time = time.time()
 	    self.QCH_num += 1
@@ -253,14 +254,30 @@ class cs_mac(object):
             else:
                 self.lasta = random.choice(range(10))
 
-            time.sleep(0.002) #protect time 
-	    time.sleep( self.lasta * self.slotcell)
+            mytime = 0.002 + self.jumplast_time - time.time()
+            #print "first protect time 0.002 ",mytime
+	    if mytime > 0:
+                time.sleep(mytime) #protect time 
+
+            mytime = self.lasta * self.slotcell + 0.002 + self.jumplast_time - time.time()
+            #print "first lasta is %d" %self.lasta ,mytime
+            if mytime > 0:
+	        time.sleep(self.lasta * self.slotcell + 0.002 + self.jumplast_time - time.time())
+
 	    if not self.mutilcast:   #ZLM Fixme   
 	        if self.mycon.acquire():
 	 	    self.mycon.notify()
 		    self.mycon.release()
-	    time.sleep( (9 - self.lasta) * self.slotcell )
-	    time.sleep(0.005) #save time
+
+            mytime = self.time_slot + self.jumplast_time - 0.005 - time.time()
+            #print "seconed lasta is %d" %self.lasta ,mytime
+	    if mytime >0:
+	        time.sleep( self.time_slot + self.jumplast_time - 0.005 - time.time() )
+
+            mytime = self.time_slot + self.jumplast_time - time.time()
+            #print "last protect time 0.005 ",mytime
+            if mytime > 0:
+	        time.sleep(self.time_slot + self.jumplast_time - time.time() ) #save time
 
 	    if (time.time() - self.last_send > 2) and (time.time() - self.last_receive > 2):  #
 		if not self.reservation:
