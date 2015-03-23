@@ -247,10 +247,10 @@ class cs_mac(object):
 	    self.DCnumber = self.QCH[(self.QCH_num)%9]
     
             if random.randint(1,10) < 8:
-                minQ = min(self.Qlearn)
+                maxQ = max(self.Qlearn)
 #               minQindex = filter(lambda x: self.Qlearn[x] == minQ, range(10))
 #                self.lasta = random.choice(minQindex)
-                self.lasta = self.Qlearn.index(min(self.Qlearn))
+                self.lasta = self.Qlearn.index(max(self.Qlearn))
             else:
                 self.lasta = random.choice(range(10))
 
@@ -348,7 +348,7 @@ class cs_mac(object):
         """
 	first_cts = 1
 	#first_data = 0
-	Q_r = 1
+	Q_r = -1
         if self.verbose:
             print "Rx: ok = %r  len(payload) = %4d" % (ok, len(payload))
             rec_diff_time = time.time() - self.jumplast_time
@@ -446,9 +446,9 @@ class cs_mac(object):
                 if self.first_data:
                     print "###############################first data send success############################################"
                     if self.reservation_slot > 9:
-                        Q_r = 1
-                    else:
                         Q_r = -1
+                    else:
+                        Q_r = 1
                     self.Qlearn[self.lasta] = (1-self.alpha)*self.Qlearn[self.lasta] + self.alpha*Q_r
                     Qstr = str(self.Qlearn)
                     Qstr = Qstr.replace('[','')
