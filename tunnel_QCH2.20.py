@@ -197,13 +197,15 @@ class cs_mac(object):
         #self.end_time = time.time()
 	self.last_send = self.org_time
 	self.last_receive = self.org_time
+	self.first_data = 0
+	self.first_ack = 1
 
 
         self.jumplast_time = 0
         self.reservation = 1
         self.peer_addr = "\0\0\0\0\0\0"
         self.data_channel = -1
-        self.time_slot = 0.04
+        self.time_slot = 0.03
 
 
 	self.mycon = threading.Condition()
@@ -313,6 +315,7 @@ class cs_mac(object):
         @param payload: contents of the packet (string)
         """
 	first_cts = 1
+	#first_data = 0
 	Q_r = 1
         if self.verbose:
             print "Rx: ok = %r  len(payload) = %4d" % (ok, len(payload))
@@ -348,16 +351,17 @@ class cs_mac(object):
 		if 1 == self.reservation:
 		    first_cts = 1
                     self.reservation = 0
+                    self.send_state = 3
                     print "reservation success"
-		    print "reservation_slot is %d" %self.rts_slot
+		    print "reservation_slot is %d, channel is %d" %(self.rts_slot, self.data_channel)
 		else:
 		    first_cts = 0
-                self.send_state = 3
                 #pdb.set_trace()
 		#self.srlock.release()
                 if first_cts: #
                     self.reservation_time = time.time() - self.org_time
                     self.reservation_slot = self.rts_slot
+		    """
                     if self.reservation_slot > 9:
                         Q_r = 1
                     else:
@@ -376,7 +380,9 @@ class cs_mac(object):
 
                     self.reser_time_file.flush()
                     self.reser_slot_file.flush()
-                    #print "After write into file"
+                    
+                    print "After write into file"
+                    """
 
             elif pkttype == TYPE_DAT and pktsubtype == SUBTYPE_DATA: #and self.receive_state == 2:
                 print"received DATA frame,time is %.4f ,and the channel is %d" %(time.time()-self.org_time, self.data_channel)
@@ -405,6 +411,33 @@ class cs_mac(object):
                 self.wait_ack.acquire()
                 self.wait_ack.notify()
                 self.wait_ack.release()
+                if self.first_data:
+                    print "###############################first data send success############################################"
+                    if self.reservation_slot > 9:
+                        Q_r = 1
+                    else:
+                        Q_r = -1
+                    self.Qlearn[self.lasta] = (1-self.alpha)*self.Qlearn[self.lasta] + self.alpha*Q_r
+                    Qstr = str(self.Qlearn)
+                    Qstr = Qstr.replace('[','')
+                    Qstr = Qstr.replace(']','')
+                    Qstr = Qstr.replace(' ','')
+
+                    self.Qfile.write(Qstr + '\n')
+                    self.Qfile.flush()
+
+                    self.reser_time_file.write("%.4f\n" %(self.reservation_time-self.rts_time))
+                    self.reser_slot_file.write("%d\n" %(self.reservation_slot) )
+
+                    self.reser_time_file.flush()
+                    self.reser_slot_file.flush()
+                    print "After write into file"
+
+                    self.first_data = 0
+                    self.first_ack = 1
+                    
+		    
+
                 #self.receive_lock = False
                 #self.timer = False
                 #self.t.exit()
@@ -471,7 +504,11 @@ class cs_mac(object):
                 print "After send DATA,time is %.4f ,and the channel is %d" %(time.time()-self.org_time , self.data_channel)
 		self.last_send = time.time()
                 print "the channel is %d" %self.data_channel
-                self.send_state = 3                                  
+                if 3 == self.send_state:
+                    self.send_state = 4                                  
+		    self.first_data = 1
+                    print "------------------------------set first data flag-----------------------------------"
+
 		data_count = 1
 		self.srlock.release()
 
@@ -499,8 +536,16 @@ class cs_mac(object):
                     self.last_send = time.time()
                     self.mycon.release()
                     self.send_state = 2
-                    self.rts_slot = 1
-		    rts_count = 1
+
+                    if self.first_ack:
+                        self.rts_slot = 1
+		        rts_count = 1
+                        self.first_ack = 0
+                    else:
+                        print "==================================first data send failed====================================="
+                        self.rts_slot += 9
+		        rts_count += 9
+
 		#self.srlock.release()
                     #continue
                 #time.sleep(self.time_slot)
@@ -521,9 +566,10 @@ class cs_mac(object):
                     break
 
                 if rts_count > 30:
-                    rts_count = 0 
+                    #rts_count = 0 
                     self.payload = False
                     self.reservation = 1
+                    self.first_ack = 1
                     print 'Dst note not online and quit  tttttttttttttttttttttttttttttttttttttttttttttttttttttttt'
 		    break
 
@@ -551,7 +597,7 @@ class cs_mac(object):
 			#print "the channel is %d" %self.data_channel
 			self.mycon.release()
                
-                elif 3 == self.send_state:
+                elif 4 == self.send_state:
                     #print "In repeat send DATA"
                     #if not self.payload:
                     #    print 'got ACK and last DATA received'
