@@ -15,7 +15,7 @@ def Var_com(numlist,mean,have_mean = True):
         _mean = mean
     return (numlist*numlist).sum()/len(numlist) - _mean**2
 
-for i in range(100):
+for i in range(20):
     #print 'after sleep'
     print 'ping for %d times' %(i+1)
     output = os.popen('/bin/ping 192.168.200.2 -c 10')
@@ -51,6 +51,21 @@ for readline in f2:
         re_slot.append([])
     re_slot[i/5].append(ele)
     i += 1
+
+true_slot = []
+for readline in f2:
+    try:
+        ele = float(readline)
+    except (ValueError,NameError),e:
+        print e
+        raise ValueError
+    true_slot.append(ele)
+
+plt.figure(3)
+xlist = range(len(true_slot))
+plt.plot(xlist,true_slot)
+
+
 f2.close()
 f3 = open('/home/momo/digital_withonly_yuyue/result_timeslot.txt','w')
 meantime = []
@@ -73,7 +88,7 @@ for i in range(len(re_time)):
     f3.write("%.4f\t%.4f\t%d\t%.4f\n" %(meantime[i],vartime[i],meanslot[i],varslot[i]))
 
 f3.close()
-plt.figure(3)
+plt.figure(4)
 xlist = range(len(re_time))
 plt.plot(xlist,meantime)    
 
