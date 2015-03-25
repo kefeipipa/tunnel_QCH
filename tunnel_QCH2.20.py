@@ -199,6 +199,7 @@ class cs_mac(object):
 	self.last_receive = self.org_time
 	self.first_data = 0
 	self.first_ack = 1
+	self.at_least_one = False
 
 
         self.jumplast_time = 0
@@ -300,6 +301,18 @@ class cs_mac(object):
 		    
 		    print "send or receive end, return to channel jump"
 	            self.reservation = True 
+		    if self.at_least_one:
+			self.at_least_one = False
+		    else: #no data sending success
+			print "at least one is False ,which means that no data sending successful"
+			#write 90 as rerservation_slot into file
+			self.reser_time_file.write("%.4f\n" %(90*self.time_slot))
+			self.reser_slot_file.write("%d\n" %90)
+			self.reser_time_file.flush()
+			self.reser_slot_file.flush()
+
+			self.first_ack = 1
+
 
 	    if self.reservation:
 		self.channeljump(self.DC_freq[self.DCnumber])
@@ -472,6 +485,7 @@ class cs_mac(object):
 
                     self.first_data = 0
                     self.first_ack = 1
+                    self.at_least_one = True
                     
 		    
 
@@ -606,10 +620,10 @@ class cs_mac(object):
                     data_count = 0
                     break
 
-                if rts_count > 30:
+                if rts_count > 1:
                     #rts_count = 0 
                     self.payload = False
-                    self.reservation = 1
+                    self.reservation = 1 #can we delete it??
                     self.first_ack = 1
                     print 'Dst note not online and quit  tttttttttttttttttttttttttttttttttttttttttttttttttttttttt'
 		    break
