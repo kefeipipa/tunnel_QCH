@@ -211,6 +211,7 @@ class cs_mac(object):
 	self.mycon = threading.Condition()
         self.wait_ack = threading.Condition()
         self.srlock = threading.Lock()
+        self.sendstate_lock = threading.Lock()
 
 
         self.mutilcast = True
@@ -378,6 +379,8 @@ class cs_mac(object):
 
 
             elif pkttype == TYPE_CTL and pktsubtype == SUBTYPE_CTS: #and self.send_state == 2:
+	      
+	        self.sendstate_lock.acquire()
                 print"received CTS frame,time is %.4f ,and the channel is %d" %(time.time()-self.org_time,self.data_channel)
                 self.receive_state = 2
 		if 1 == self.reservation:
@@ -388,6 +391,8 @@ class cs_mac(object):
 		    print "reservation_slot is %d, channel is %d" %(self.rts_slot, self.data_channel)
 		else:
 		    first_cts = 0
+
+		self.sendstate_lock.release()
                 #pdb.set_trace()
 		#self.srlock.release()
                 if first_cts: #
@@ -567,7 +572,10 @@ class cs_mac(object):
                     print "After send RTS,time is %.4f ,and the channel is %d" %(time.time()-self.org_time , self.data_channel)
                     self.last_send = time.time()
                     self.mycon.release()
-                    self.send_state = 2
+                    
+                    if self.sendstate_lock.acquire(False): #only acquire lock can change the send_state ,if not then cannot change it
+                        self.send_state = 2
+			self.sendstate_lock.release()
 
                     if self.first_ack:
                         self.rts_slot = 1
