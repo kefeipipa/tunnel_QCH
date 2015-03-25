@@ -535,7 +535,7 @@ class cs_mac(object):
                 self.sender.send_DATA(self.payload)
                 print "After send DATA,time is %.4f ,and the channel is %d" %(time.time()-self.org_time , self.data_channel)
 		self.last_send = time.time()
-                print "the channel is %d" %self.data_channel
+                print "the send state is %d" %self.send_state
                 if 3 == self.send_state:
                     self.send_state = 4                                  
 		    self.first_data = 1
@@ -578,6 +578,7 @@ class cs_mac(object):
                         self.rts_slot += 9
 		        rts_count += 9
 
+                    print "RTS count is %d" %rts_count
 		#self.srlock.release()
                     #continue
                 #time.sleep(self.time_slot)
@@ -614,7 +615,6 @@ class cs_mac(object):
 			    self.mycon.release()
 			    break #not use continue because we must make first data different
 
-                        print "RTS count is %d" %rts_count
 			#if not self.payload:
 			#    print "got ACK, and last DATA received"
 			#    self.mycon.release()
@@ -628,6 +628,7 @@ class cs_mac(object):
 			self.last_send = time.time()
 			#print "the channel is %d" %self.data_channel
 			self.mycon.release()
+                        print "RTS count is %d" %rts_count
                
                 elif 4 == self.send_state:
                     #print "In repeat send DATA"
