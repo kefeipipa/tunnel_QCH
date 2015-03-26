@@ -199,6 +199,7 @@ class cs_mac(object):
 	self.last_receive = self.org_time
 	self.first_data = 0
 	self.first_ack = 1
+	self.at_least_one = False
 
 
         self.jumplast_time = 0
@@ -208,15 +209,18 @@ class cs_mac(object):
         self.time_slot = 0.05
 
 
+        self.RTS_waiting = 0
+        self.tow_RTS_wait = threading.Condition()
 	self.mycon = threading.Condition()
         self.wait_ack = threading.Condition()
         self.srlock = threading.Lock()
+        self.sendstate_lock = threading.Lock()
 
 
         self.mutilcast = True
         self.reservation_time = self.org_time
         self.reservation_slot = 0
-        self.rts_slot =0
+        self.rts_slot = 0
 
         self.reser_time_file = None
         self.reser_slot_file = None
@@ -300,6 +304,18 @@ class cs_mac(object):
 		    
 		    print "send or receive end, return to channel jump"
 	            self.reservation = True 
+                    
+                    if self.at_least_one:
+                        self.at_least_one = False
+		    else:
+		        self.reser_time_file.write("%.4f\n" %(50*self.time_slot))
+			self.reser_slot_file.write("%d\n" %(50) )
+                        self.reser_time_file.flush()
+                        self.reser_slot_file.flush()
+                         
+                        self.first_ack = 1
+                        
+                        
 
 	    if self.reservation:
 		self.channeljump(self.DC_freq[self.DCnumber])
@@ -371,7 +387,12 @@ class cs_mac(object):
                 print"After send CTS frame,time is %.4f ,and the channel is %d" %(time.time()-self.org_time, self.data_channel)
 		self.last_send = time.time()
                 self.receive_state = 2
-                self.send_state = 0
+
+		if 2 == self.send_state:
+		    self.sendstate_lock.acquire()
+                    print 'before change to 1 , the send_state is %d' %self.send_state
+                    self.send_state = 1
+		    self.sendstate_lock.release()
 		#self.srlock.release()
                 #self.timer = False
                 #self.t.exit() 
@@ -379,16 +400,28 @@ class cs_mac(object):
 
 
             elif pkttype == TYPE_CTL and pktsubtype == SUBTYPE_CTS: #and self.send_state == 2:
+
+                if self.RTS_waiting:
+                    self.tow_RTS_wait.acquire()
+
+          
+	        self.sendstate_lock.acquire()
                 print"received CTS frame,time is %.4f ,and the channel is %d" %(time.time()-self.org_time,self.data_channel)
                 self.receive_state = 2
 		if 1 == self.reservation:
 		    first_cts = 1
                     self.reservation = 0
-                    self.send_state = 3
                     print "reservation success"
 		    print "reservation_slot is %d, channel is %d" %(self.rts_slot, self.data_channel)
 		else:
 		    first_cts = 0
+                print 'before change to 3 , the send_state is %d' %self.send_state
+                self.send_state = 3
+		self.sendstate_lock.release()
+
+                if self.RTS_waiting:
+                    self.tow_RTS_wait.notify()
+                    self.tow_RTS_wait.release()
                 #pdb.set_trace()
 		#self.srlock.release()
                 if first_cts: #
@@ -439,6 +472,7 @@ class cs_mac(object):
 	        self.srlock.acquire()
                 print"received ACK frame,DATA sending success ,time is %.4f, and the channel is %d" %(time.time()-self.org_time, self.data_channel)
                 self.payload = False
+                print 'before change to 2 , the send_state is %d' %self.send_state
                 self.send_state = 0
 		self.srlock.release()
                 self.wait_ack.acquire()
@@ -470,7 +504,7 @@ class cs_mac(object):
 
                     self.first_data = 0
                     self.first_ack = 1
-                    
+                    self.at_least_one = True
 		    
 
                 #self.receive_lock = False
@@ -564,23 +598,31 @@ class cs_mac(object):
  		    self.mycon.wait()
 
 		    self.CSMA()
-                    self.rts_time = time.time() - self.org_time
+                    if self.first_ack:
+                        self.rts_time = time.time() - self.org_time
                     print "Before send RTS,time is %.4f" %(time.time()-self.org_time)
 		    self.sender.send_RTS(self.payload)
                     print "After send RTS,time is %.4f ,and the channel is %d" %(time.time()-self.org_time , self.data_channel)
+                    print 'first rts send time is %.4f' %self.rts_time
                     self.last_send = time.time()
                     self.mycon.release()
-                    self.send_state = 2
+
+                    if self.sendstate_lock.acquire(False): #only acquire lock can change the send_state ,if not then cannot change it
+                        print 'before change to 2 , the send_state is %d' %self.send_state
+                        self.send_state = 2
+	                self.sendstate_lock.release()
 
                     if self.first_ack:
                         self.rts_slot = 1
 		        rts_count = 1
                         self.first_ack = 0
                     else:
+		        #channel yuyue for another time
                         print "==================================first data send failed====================================="
                         self.rts_slot += 9
 		        rts_count += 9
 
+                    print "RTS count is %d, rts_slot is %d" %(rts_count, self.rts_slot)
 		#self.srlock.release()
                     #continue
                 #time.sleep(self.time_slot)
@@ -601,13 +643,20 @@ class cs_mac(object):
                     break
 
                 if rts_count > 30:
-                    #rts_count = 0 
+                    rts_count = 0 
                     self.payload = False
                     self.reservation = 1
                     self.first_ack = 1
                     print 'Dst note not online and quit  tttttttttttttttttttttttttttttttttttttttttttttttttttttttt'
 		    break
-
+                
+		if 1 == self.send_state:
+		    self.RTS_waiting = 1
+                    self.tow_RTS_wait.acquire()
+                    self.tow_RTS_wait.wait(0.2) #when wating RTS_waiting must be 1
+                    self.tow_RTS_wait.release()
+                    self.RTS_waiting = 0
+                    break
 
                 if 2 == self.send_state:
 		    if self.mycon.acquire():
@@ -617,7 +666,6 @@ class cs_mac(object):
 			    self.mycon.release()
 			    break #not use continue because we must make first data different
 
-                        print "RTS count is %d" %rts_count
 			#if not self.payload:
 			#    print "got ACK, and last DATA received"
 			#    self.mycon.release()
@@ -626,8 +674,11 @@ class cs_mac(object):
                         print "Before repeat send RTS,time is %.4f" %(time.time()-self.org_time)
 			self.sender.send_RTS(self.payload)
                         print "After repeat send RTS,time is %.4f ,and the channel is %d" %(time.time()-self.org_time , self.data_channel)
+                        print 'send state is %d' %self.send_state
+                        
                         rts_count += 1
 			self.rts_slot += 1
+                        print "RTS count is %d, rts_slot is %d" %(rts_count, self.rts_slot)
 			self.last_send = time.time()
 			#print "the channel is %d" %self.data_channel
 			self.mycon.release()
