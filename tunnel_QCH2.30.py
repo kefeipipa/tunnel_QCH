@@ -207,7 +207,7 @@ class cs_mac(object):
         self.reservation = 1
         self.peer_addr = "\0\0\0\0\0\0"
         self.data_channel = -1
-        self.time_slot = 0.5
+        self.time_slot = 0.05
 
         self.RTS_waiting = 0
 	self.towRTS = threading.Condition()
@@ -294,7 +294,7 @@ class cs_mac(object):
             """
 
 	    
-            #self.lasta = 2
+            self.lasta = 5
             self.Afterjump.acquire()            
             time.sleep(0.002) #protect time 
             sendctl_time = self.lasta * self.slotcell
@@ -414,15 +414,25 @@ class cs_mac(object):
             (pkttype,pktsubtype,pktpayload) = self.receiver.receive(payload)
             print "pkttype:%X   pktsubtype:%X" %(pkttype,pktsubtype)
             self.last_receive = time.time()
-            Afterjump_flag = self.Afterjump.acquire(False)
-            print 'Afterjump lock ', Afterjump_flag
-            if Afterjump_flag:
-	        self.Afterjump.release()
-            #print '######################################## Afterjump_lock False ###################################################'
-            print 'payload ',self.payload
-            print 'send state is %d' %self.send_state
+
+            #debug the Afterjump_lock
+            #Afterjump_flag = self.Afterjump.acquire(False)
+            #print 'Afterjump lock ', Afterjump_flag
+            #if Afterjump_flag:
+	    #    self.Afterjump.release()
+            #else:
+            #    print '######################################## Afterjump_lock False ###################################################'
+            #print 'payload ',self.payload
+            #print 'send state is %d' %self.send_state
+            #end debug the Afterjump_lock
+
+
+
             self.srlock.acquire()
-            print '######################################### i got the srlock ###########################################'
+            #print '######################################### i got the srlock ###########################################'
+            
+
+
             if pkttype == TYPE_CTL and pktsubtype == SUBTYPE_RTS and self.Afterjump.acquire():
                 self.Afterjump.release()
                 print"received RTS frame,time is %.4f ,and the channel is %d, and send_state is %d" %(time.time()-self.org_time, self.data_channel,self.send_state)
@@ -517,14 +527,6 @@ class cs_mac(object):
                     
 		    
                 """
-                #self.receive_lock = False
-                #self.timer = False
-                #self.t.exit()
-                #print "data sending success,time is %.4f" %(time.time()-self.org_time)
-
-                
-        #if ok:    
-        #    os.write(self.tun_fd, payload)
 
 
 
@@ -541,25 +543,21 @@ class cs_mac(object):
 	self.re_channel = f4
 
         min_delay = 0.001               # seconds
-# thread.start_new_thread(self.usual_channel_jump,())
 	t = threading.Thread(target = self.usual_channel_jump)
         t.start()
         time_count = 0
         east_send = 0
         data_count = 0
-	rts_count = 0 #its seems useless to count how many rts we send
+	rts_count = 0 
         while 1:
 
             if not self.payload:
                 self.payload = os.read(self.tun_fd, 10*1024)
-                #print "data read from system,payload = %5d"%len(self.payload)
                 (mac_add,) = struct.unpack('B',self.payload[0:1])
                 if (mac_add & 0x1) == 0x1 and mac_add != 0xFF:
                     self.payload = False
                     print"mutilcast discard"
-                    #res = 1 #when start we need the reservation
                     continue
-            #pdb.set_trace()
             self.mutilcast = False  #first the notify need not to run
 
 
@@ -637,11 +635,12 @@ class cs_mac(object):
 	        while 2 == self.send_state and self.payload:
 		    
 		    if rts_count > 25: #payload = False ,loss packet
-		        rts_count = 0
 			self.payload = False
 			self.send_state = 0
 			#self.first_ack = 1
+			print 'rts count upto %d' %rts_count
 			print '&&&&&&&&&&&&&&&&&& loss packet &&&&&&&&&&&&&&&&&&&&&'
+		        rts_count = 0
                         time.sleep(0.3) #After loss packet sleep
 			break
 
@@ -668,6 +667,12 @@ class cs_mac(object):
                     	            
 
       		while 4 == self.send_state and self.payload:
+		    if data_count > 3:
+			self.send_state = 0
+			print 'data count upto %d' %data_count
+		        data_count = 0
+			break
+
                     self.srlock.acquire()
                     if not self.payload:
                         print "got ACK, and last DATA received"
