@@ -207,7 +207,7 @@ class cs_mac(object):
         self.reservation = 1
         self.peer_addr = "\0\0\0\0\0\0"
         self.data_channel = -1
-        self.time_slot = 0.05
+        self.time_slot = 0.5
 
         self.RTS_waiting = 0
 	self.towRTS = threading.Condition()
@@ -414,9 +414,15 @@ class cs_mac(object):
             (pkttype,pktsubtype,pktpayload) = self.receiver.receive(payload)
             print "pkttype:%X   pktsubtype:%X" %(pkttype,pktsubtype)
             self.last_receive = time.time()
-
+            Afterjump_flag = self.Afterjump.acquire(False)
+            print 'Afterjump lock ', Afterjump_flag
+            if Afterjump_flag:
+	        self.Afterjump.release()
+            #print '######################################## Afterjump_lock False ###################################################'
+            print 'payload ',self.payload
+            print 'send state is %d' %self.send_state
             self.srlock.acquire()
-
+            print '######################################### i got the srlock ###########################################'
             if pkttype == TYPE_CTL and pktsubtype == SUBTYPE_RTS and self.Afterjump.acquire():
                 self.Afterjump.release()
                 print"received RTS frame,time is %.4f ,and the channel is %d, and send_state is %d" %(time.time()-self.org_time, self.data_channel,self.send_state)
