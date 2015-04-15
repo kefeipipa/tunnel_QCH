@@ -2,12 +2,13 @@
 
 
 def makeQCH(num):
-    line = range(num)
-    sline = line
+    rline = range(num)
+    sline = range(num)
+    sline.reverse()
     RQline = []
     SQline = []
     for i in range(num):
-	RQline += line
+	RQline += rline
         SQline += sline
         sline = sline[1:] + [sline[0]]
     return (RQline, SQline)
@@ -17,4 +18,6 @@ def makeQCH(num):
 
  
 
-#makeQCH(4)
+(a,b) =  makeQCH(4)
+print a
+print b
